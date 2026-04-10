@@ -1,32 +1,64 @@
-# Projeto Final - Reconhecimento de Imagens com IA
+# VisionAI Studio
 
-Este projeto foi desenvolvido a partir da estrutura da pasta `servicos_software_p` e implementa uma aplicação distribuída em containers Docker para classificação de imagens com inteligência artificial.
+<p align="center">
+  <strong>Classificação de imagens com IA, histórico inteligente, acessibilidade por voz e geração automática de GIF animado.</strong>
+</p>
 
-## Visão geral
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10-blue" alt="Python">
+  <img src="https://img.shields.io/badge/Gradio-Frontend-orange" alt="Gradio">
+  <img src="https://img.shields.io/badge/FastAPI-Backend-green" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED" alt="Docker">
+  <img src="https://img.shields.io/badge/SQLite-Banco%20de%20dados-003B57" alt="SQLite">
+  <img src="https://img.shields.io/badge/IA-Vis%C3%A3o%20Computacional-purple" alt="IA">
+</p>
 
-A aplicação é composta por três containers:
+---
 
-- **gradio-visao**: frontend com interface web para envio de imagens;
-- **api-visao**: backend responsável por receber a imagem, executar a classificação com um modelo de visão computacional e retornar o resultado;
-- **api-armazenamento**: serviço responsável por salvar a imagem enviada e registrar os dados da análise em banco SQLite.
+## Sobre o projeto
 
-## Funcionalidades
+O **VisionAI Studio** é uma aplicação distribuída em containers Docker para análise inteligente de imagens.
 
-O sistema permite:
+O sistema foi desenvolvido a partir da estrutura da pasta `servicos_software_p` e possui dois grandes recursos principais:
 
-- enviar uma imagem pela interface web;
-- classificar automaticamente a imagem com um modelo de IA;
-- exibir o **rótulo principal** identificado;
-- exibir o **top 3 de previsões** com porcentagens;
-- apresentar os resultados de forma mais amigável;
-- salvar a imagem enviada em volume compartilhado;
-- registrar no banco de dados:
-  - nome do arquivo;
-  - rótulo identificado;
-  - data e hora da análise;
-- consultar o histórico das últimas análises realizadas.
+- **Classificação automática de imagens com inteligência artificial**
+- **Geração automática de GIF animado a partir da imagem enviada**
 
-## Arquitetura
+Além disso, a aplicação também oferece:
+
+- histórico persistente de análises;
+- leitura em voz do resultado;
+- interface visual aprimorada;
+- tradução dos rótulos retornados pelo modelo.
+
+---
+
+## Funcionalidades principais
+
+### Classificação inteligente de imagens
+A aplicação analisa a imagem enviada pelo usuário e exibe:
+
+- rótulo principal identificado;
+- rótulo original retornado pelo modelo;
+- top 3 previsões com porcentagens;
+- status do armazenamento no banco de dados.
+
+### Geração automática de GIF animado
+A aplicação também gera um **GIF animado** automaticamente a partir da imagem enviada, criando uma animação suave com efeito visual de movimento.
+
+### Histórico persistente
+Todas as análises são registradas em banco SQLite com:
+
+- nome do arquivo;
+- rótulo identificado;
+- data e hora da análise.
+
+### Recurso de acessibilidade
+Após a análise, o sistema pode **ler o resultado em voz alta** diretamente no navegador.
+
+---
+
+## Arquitetura da aplicação
 
 ```text
 Usuário
@@ -35,82 +67,7 @@ Usuário
 gradio-visao (frontend)
    |
    v
-api-visao (backend de classificação)
+api-visao (backend de classificação + geração de GIF)
    |
    v
-api-armazenamento (persistência de arquivos e banco SQLite).
-```
-
-## Estrutura do projeto
-
-servicos_software_p/
-├── api-armazenamento/
-│   ├── Dockerfile
-│   ├── main.py
-│   └── requirements.txt
-├── api-visao/
-│   ├── Dockerfile
-│   ├── main.py
-│   └── requirements.txt
-├── gradio-visao/
-│   ├── Dockerfile
-│   ├── app.py
-│   └── requirements.txt
-└── compose.yaml
-
-## Tecnologias utilizadas
-
-Python
-Gradio
-FastAPI
-Transformers
-Pillow
-SQLite
-Docker Compose
-
-## Como usar
-
-Faça upload de uma imagem;
-Clique em Analisar imagem;
-Veja o rótulo principal e o top 3 de previsões da IA;
-Clique em Ver histórico para consultar as últimas análises salvas.
-
-## Comandos úteis
-
-# Subir os containers
-docker compose up
-# Subir reconstruindo as imagens
-docker compose up --build
-# Rodar em segundo plano
-docker compose up -d
-# Ver logs
-docker compose logs -f
-# Parar os containers
-docker compose down
-# Parar e apagar também o volume do banco
-docker compose down -v
-
-## Comunicação entre os serviços
-
-O frontend gradio-visao envia a imagem para a API api-visao via REST;
-A api-visao classifica a imagem com um modelo de visão computacional;
-Em seguida, envia os dados para a api-armazenamento;
-A api-armazenamento salva o arquivo no volume compartilhado e registra os dados no banco SQLite;
-O resultado é devolvido ao frontend.
-
-## Modelo utilizado
-
-O projeto utiliza um modelo de visão computacional de terceiros para classificação de imagens, atendendo à proposta da atividade.
-
-## Resultado esperado
-
-Após enviar uma imagem, o sistema deve exibir:
-
-o rótulo principal;
-o top 3 de previsões com porcentagem;
-o status do salvamento no banco;
-o histórico das últimas análises.
-
-## Autor
-
-Projeto desenvolvido para a disciplina, com base no repositório fornecido pelo professor e adaptado para a entrega final.
+api-armazenamento (persistência de arquivos e banco SQLite)

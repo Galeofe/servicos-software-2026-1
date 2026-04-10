@@ -84,6 +84,76 @@ def traduzir_rotulo(label: str) -> str:
     return label.replace("_", " ").replace("-", " ").strip().capitalize()
 
 
+def inferir_categoria(rotulo_pt: str) -> str:
+    texto = rotulo_pt.lower()
+
+    if any(p in texto for p in ["pastor", "cachorro", "gato", "beagle", "husky", "perereca"]):
+        return "animal"
+
+    if any(p in texto for p in ["carro", "minivan", "caminhonete", "bicicleta", "avião", "scooter", "roda"]):
+        return "veículo"
+
+    if any(p in texto for p in [
+        "pizza", "hambúrguer", "cachorro-quente", "banana",
+        "laranja", "limão", "abacaxi", "café", "copo", "caneca"
+    ]):
+        return "alimento ou bebida"
+
+    if any(p in texto for p in ["celular", "notebook", "computador", "monitor", "teclado", "site"]):
+        return "tecnologia"
+
+    if any(p in texto for p in ["mochila", "garrafa", "tocha", "papel higiênico", "estante", "capa de livro"]):
+        return "objeto"
+
+    return "elemento visual"
+
+
+def gerar_descricao_automatica(rotulo_pt: str, score: float, categoria: str) -> str:
+    nome = rotulo_pt.lower()
+
+    if score >= 70:
+        return f"A imagem provavelmente mostra {nome}, com forte correspondência visual na categoria de {categoria}."
+
+    if score >= 45:
+        return f"A imagem parece mostrar {nome}, com correspondência visual moderada na categoria de {categoria}."
+
+    return f"A imagem pode estar relacionada a {nome}, mas a confiança visual foi mais baixa."
+
+
+def gerar_explicacao_visual(top3_processado: list, categoria: str) -> str:
+    if not top3_processado:
+        return "Não foi possível gerar uma explicação visual."
+
+    principal = top3_processado[0]
+    score_principal = principal["score"]
+
+    if len(top3_processado) > 1:
+        score_segundo = top3_processado[1]["score"]
+        diferenca = score_principal - score_segundo
+    else:
+        diferenca = score_principal
+
+    alternativas = ", ".join(item["label"].lower() for item in top3_processado[1:])
+
+    if diferenca >= 15:
+        base = "A previsão principal ficou bem acima das demais"
+    elif diferenca >= 7:
+        base = "A previsão principal ficou um pouco acima das demais"
+    else:
+        base = "As previsões ficaram relativamente próximas entre si"
+
+    if alternativas:
+        return (
+            f"{base}, o que indica que a imagem possui características visuais "
+            f"da categoria de {categoria}. As alternativas mais próximas foram {alternativas}."
+        )
+
+    return (
+        f"{base}, o que indica que a imagem possui características visuais "
+        f"da categoria de {categoria}."
+    )
+
+
 def enquadrar_no_canvas(imagem: Image.Image, tamanho=(512, 512)) -> Image.Image:
     ajustada = ImageOps.contain(imagem, tamanho, Image.LANCZOS)
     canvas = Image.new("RGB", tamanho, (245, 248, 255))
@@ -160,6 +230,23 @@ async def analisar_imagem(file: UploadFile = File(...)):
     rotulo_predito_en = top3[0]["label"]
     rotulo_predito_pt = traduzir_rotulo(rotulo_predito_en)
 
+    top3_processado = [
+        {
+            "label": traduzir_rotulo(item["label"]),
+            "label_original": item["label"],
+            "score": round(item["score"] * 100, 2)
+        }
+        for item in top3
+    ]
+
+    categoria = inferir_categoria(rotulo_predito_pt)
+    descricao_automatica = gerar_descricao_automatica(
+        rotulo_predito_pt,
+        top3_processado[0]["score"],
+        categoria
+    )
+    explicacao_visual = gerar_explicacao_visual(top3_processado, categoria)
+
     files = {"file": (file.filename, conteudo, file.content_type)}
     data = {"rotulo": rotulo_predito_pt}
 
@@ -177,14 +264,9 @@ async def analisar_imagem(file: UploadFile = File(...)):
         "rotulo": rotulo_predito_pt,
         "rotulo_original": rotulo_predito_en,
         "status_db": status_db,
-        "top3": [
-            {
-                "label": traduzir_rotulo(item["label"]),
-                "label_original": item["label"],
-                "score": round(item["score"] * 100, 2)
-            }
-            for item in top3
-        ]
+        "descricao_automatica": descricao_automatica,
+        "explicacao_visual": explicacao_visual,
+        "top3": top3_processado
     }
 
 

@@ -32,6 +32,12 @@ def analisar_imagem(imagem_path):
                 rotulo = html.escape(dados.get("rotulo", "Não identificado"))
                 rotulo_original = html.escape(dados.get("rotulo_original", "Não identificado"))
                 status_db = html.escape(dados.get("status_db", "Sem status"))
+                descricao_automatica = html.escape(
+                    dados.get("descricao_automatica", "Descrição não disponível.")
+                )
+                explicacao_visual = html.escape(
+                    dados.get("explicacao_visual", "Explicação não disponível.")
+                )
                 top3 = dados.get("top3", [])
 
                 top3_html = ""
@@ -57,9 +63,11 @@ def analisar_imagem(imagem_path):
                         )
 
                 resumo_acessivel = (
-                    f"A imagem parece mostrar: {dados.get('rotulo', 'Não identificado')}. "
-                    f"O rótulo original retornado pelo modelo foi: {dados.get('rotulo_original', 'Não identificado')}. "
-                    f"O status do armazenamento foi: {dados.get('status_db', 'Sem status')}. "
+                    f"{dados.get('descricao_automatica', 'Descrição não disponível.')} "
+                    f"{dados.get('explicacao_visual', 'Explicação não disponível.')} "
+                    f"O rótulo principal foi {dados.get('rotulo', 'Não identificado')}. "
+                    f"O rótulo original retornado pelo modelo foi {dados.get('rotulo_original', 'Não identificado')}. "
+                    f"O status do armazenamento foi {dados.get('status_db', 'Sem status')}. "
                 )
 
                 if top3_texto:
@@ -83,6 +91,16 @@ def analisar_imagem(imagem_path):
                     <div class="result-line">
                         <span class="result-label">Status do banco</span>
                         <span class="result-value success">{status_db}</span>
+                    </div>
+
+                    <div class="description-box">
+                        <h4>Descrição automática da imagem</h4>
+                        <p>{descricao_automatica}</p>
+                    </div>
+
+                    <div class="description-box secondary">
+                        <h4>Explicação mais humana do conteúdo visual</h4>
+                        <p>{explicacao_visual}</p>
                     </div>
 
                     <div class="top3-box">
@@ -370,6 +388,32 @@ button.secondary-btn {
     color: var(--success);
 }
 
+.description-box {
+    margin-top: 18px;
+    padding: 16px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+}
+
+.description-box.secondary {
+    background: #ffffff;
+    border-left: 4px solid #2563eb;
+}
+
+.description-box h4 {
+    margin: 0 0 10px 0;
+    color: #111827;
+    font-size: 16px;
+}
+
+.description-box p {
+    margin: 0;
+    color: #374151;
+    line-height: 1.7;
+    font-size: 14px;
+}
+
 .top3-box {
     margin-top: 20px;
     padding: 16px;
@@ -553,7 +597,7 @@ with gr.Blocks(css=css, theme=theme, title="Reconhecimento de Imagens") as demo:
         <h1>Reconhecimento de Imagens com IA</h1>
         <p>
             Envie uma imagem, receba a classificação gerada por inteligência artificial,
-            gere um GIF animado da imagem e acompanhe o histórico das últimas análises.
+            veja uma descrição automática da cena, gere um GIF animado e acompanhe o histórico das últimas análises.
         </p>
     </div>
     """)
