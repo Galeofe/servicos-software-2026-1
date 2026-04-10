@@ -1,27 +1,30 @@
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Docker Compose reference guide at
-# https://docs.docker.com/go/compose-spec-reference/
-
-# Here the instructions define your application as a service called "server".
-# This service is built from the Dockerfile in the current directory.
-# You can add other services your application may depend on here, such as a
-# database or a cache. For examples, see the Awesome Compose repository:
-# https://github.com/docker/awesome-compose
 services:
-  gradio-service:
+  gradio-visao:
     build:
-      context: gradio-json
-      dockerfile: Dockerfile 
+      context: ./gradio-visao
+      dockerfile: Dockerfile
     ports:
-      - 7860:7860
-    volumes:
-      - /work
+      - "7861:7861"
+    depends_on:
+      - api-visao
 
-  backend-json:
+  api-visao:
     build:
-      context: backend-json
-      dockerfile: Dockerfile 
+      context: ./api-visao
+      dockerfile: Dockerfile
     ports:
-      - 8080:8080
+      - "8081:8081"
+    depends_on:
+      - api-armazenamento
+
+  api-armazenamento:
+    build:
+      context: ./api-armazenamento
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
     volumes:
-      - /code
+      - dados-imagens:/dados
+
+volumes:
+  dados-imagens:

@@ -14,9 +14,61 @@ Vamos criar uma pasta para cada container:
 
 Os conteúdos serão desenvolvidos durante a aula e ficarão disponibilizados em nosso repositório github.
 
+**Gradio Visão**
 Dentro do primeiro container, iremos criar os seguintes arquivos:
 
 - Dockerfile
 - app.py
 - requirements.txt
 
+Utilizar o código disponível em serviços_software_p/gradio-visao como modelos destes arquivos.
+
+**API Visão**
+
+Dentro do container api-visão, iremos criar os seguintes arquivos:
+- Dockerfile
+- main.py
+- requirements.txt
+
+Utilizar o código disponível em serviços_software_p/api-visao como modelos destes arquivos.
+
+**API Armazenamento**
+
+- Dockerfile
+- main.py
+- requirements.txt
+
+**Alteração no arquivo compose.yaml para habilitar os novos containers**
+
+Devem ser acrescentados as seguintes linhas no arquivo:
+
+´´´xml
+      gradio-visao:
+    build: 
+      context: gradio-visao
+      dockerfile: Dockerfile
+    ports:
+      - "7861:7861"
+    depends_on:
+      - api-visao
+
+  api-visao:
+    build: 
+      context: api-visao
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    depends_on:
+      - api-armazenamento
+
+  api-armazenamento:
+    build: 
+      context: api-armazenamento
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    volumes:
+      - dados-imagens:/dados
+
+  volumes:
+    dados-imagens:
