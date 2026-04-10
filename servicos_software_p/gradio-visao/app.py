@@ -1,5 +1,13 @@
+import base64
+import html
+import tempfile
+
 import gradio as gr
 import requests
+
+API_VISAO = "http://api-visao:8081"
+API_ARMAZENAMENTO = "http://api-armazenamento:8082"
+
 
 def analisar_imagem(imagem_path):
     if imagem_path is None:
@@ -7,37 +15,57 @@ def analisar_imagem(imagem_path):
         <div class="result-empty">
             Nenhuma imagem enviada.
         </div>
-        """
+        """, ""
 
     with open(imagem_path, "rb") as f:
         files = {"file": f}
 
         try:
             response = requests.post(
-                "http://api-visao:8081/analisar",
+                f"{API_VISAO}/analisar",
                 files=files
             )
 
             if response.status_code == 200:
                 dados = response.json()
-                rotulo = dados.get("rotulo", "Não identificado")
-                rotulo_original = dados.get("rotulo_original", "Não identificado")
-                status_db = dados.get("status_db", "Sem status")
+
+                rotulo = html.escape(dados.get("rotulo", "Não identificado"))
+                rotulo_original = html.escape(dados.get("rotulo_original", "Não identificado"))
+                status_db = html.escape(dados.get("status_db", "Sem status"))
                 top3 = dados.get("top3", [])
 
                 top3_html = ""
+                top3_texto = []
+
                 if top3:
                     for i, item in enumerate(top3, start=1):
+                        label_pt = html.escape(item["label"])
+                        label_original = html.escape(item["label_original"])
+                        score = item["score"]
+
                         top3_html += f"""
                         <div class="top-item">
                             <span class="top-rank">#{i}</span>
-                            <span class="top-label">{item['label']}</span>
-                            <span class="top-score">{item['score']}%</span>
+                            <span class="top-label">{label_pt}</span>
+                            <span class="top-score">{score}%</span>
                         </div>
-                        <div class="top-original">Original: {item['label_original']}</div>
+                        <div class="top-original">Original: {label_original}</div>
                         """
 
-                return f"""
+                        top3_texto.append(
+                            f"Opção {i}: {item['label']}, com {item['score']} por cento de confiança"
+                        )
+
+                resumo_acessivel = (
+                    f"A imagem parece mostrar: {dados.get('rotulo', 'Não identificado')}. "
+                    f"O rótulo original retornado pelo modelo foi: {dados.get('rotulo_original', 'Não identificado')}. "
+                    f"O status do armazenamento foi: {dados.get('status_db', 'Sem status')}. "
+                )
+
+                if top3_texto:
+                    resumo_acessivel += "Top 3 previsões: " + ". ".join(top3_texto) + "."
+
+                html_resultado = f"""
                 <div class="result-card">
                     <div class="result-badge">Análise concluída</div>
                     <h3>Resultado da classificação</h3>
@@ -61,27 +89,93 @@ def analisar_imagem(imagem_path):
                         <h4>Top 3 previsões da IA</h4>
                         {top3_html}
                     </div>
+
+                    <div class="accessible-summary">
+                        {html.escape(resumo_acessivel)}
+                    </div>
                 </div>
                 """
+
+                return html_resultado, resumo_acessivel
 
             return f"""
             <div class="result-card error">
                 <h3>Erro no servidor</h3>
                 <p>Status HTTP: {response.status_code}</p>
             </div>
-            """
+            """, ""
 
         except Exception as e:
             return f"""
             <div class="result-card error">
                 <h3>Erro de comunicação</h3>
-                <p>{str(e)}</p>
+                <p>{html.escape(str(e))}</p>
             </div>
-            """
+            """, ""
+
+
+def gerar_gif(imagem_path):
+    if imagem_path is None:
+        return """
+        <div class="gif-empty">
+            Envie uma imagem para gerar o GIF animado.
+        </div>
+        """, None
+
+    with open(imagem_path, "rb") as f:
+        files = {"file": ("imagem.png", f, "image/png")}
+
+        try:
+            response = requests.post(
+                f"{API_VISAO}/gerar-gif",
+                files=files
+            )
+
+            if response.status_code == 200:
+                gif_bytes = response.content
+                gif_base64 = base64.b64encode(gif_bytes).decode("utf-8")
+
+                arquivo_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".gif")
+                arquivo_tmp.write(gif_bytes)
+                arquivo_tmp.flush()
+                arquivo_tmp.close()
+
+                html_gif = f"""
+                <div class="gif-card">
+                    <div class="gif-badge">Novo GIF gerado</div>
+                    <h3>Prévia do GIF animado</h3>
+                    <img
+                        src="data:image/gif;base64,{gif_base64}"
+                        alt="GIF animado gerado a partir da imagem enviada"
+                        class="gif-preview"
+                    />
+                    <p class="gif-tip">
+                        O GIF abaixo foi criado automaticamente com um efeito suave de zoom e movimento.
+                    </p>
+                </div>
+                """
+
+                return html_gif, arquivo_tmp.name
+
+            return f"""
+            <div class="gif-card error">
+                <h3>Erro ao gerar GIF</h3>
+                <p>Status HTTP: {response.status_code}</p>
+            </div>
+            """, None
+
+        except Exception as e:
+            return f"""
+            <div class="gif-card error">
+                <h3>Erro de comunicação</h3>
+                <p>{html.escape(str(e))}</p>
+            </div>
+            """, None
+
 
 def ver_historico():
     try:
-        response = requests.get("http://api-armazenamento:8082/historico")
+        response = requests.get(f"{API_ARMAZENAMENTO}/historico")
 
         if response.status_code == 200:
             dados = response.json().get("historico", [])
@@ -99,6 +193,7 @@ def ver_historico():
     except Exception as e:
         return [[f"Erro: {str(e)}", "-", "-"]]
 
+
 css = """
 :root {
     --bg-1: #f6f8fc;
@@ -115,9 +210,12 @@ css = """
 }
 
 .gradio-container {
-    max-width: 1280px !important;
+    max-width: 1200px !important;
+    width: 100% !important;
     margin: 0 auto !important;
-    padding: 28px 18px 42px 18px !important;
+    padding: 20px !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
     background:
         radial-gradient(circle at top left, #dbeafe 0%, transparent 28%),
         radial-gradient(circle at top right, #e9d5ff 0%, transparent 24%),
@@ -170,12 +268,19 @@ footer {
     box-shadow: var(--shadow);
     padding: 18px;
     backdrop-filter: blur(12px);
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
 }
 
 .upload-card,
 .result-panel,
-.history-card {
-    border-radius: var(--radius) !important;
+.history-card,
+.table-wrap,
+.gif-panel {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
 }
 
 .image-frame {
@@ -193,6 +298,7 @@ button.secondary-btn {
     padding: 14px 18px !important;
     min-height: 54px !important;
     transition: all 0.2s ease !important;
+    width: 100% !important;
 }
 
 button.primary-btn {
@@ -206,11 +312,16 @@ button.secondary-btn {
     border: 1px solid var(--border) !important;
 }
 
-.result-box {
+.result-box,
+.gif-box {
     min-height: 320px;
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
 }
 
-.result-card {
+.result-card,
+.gif-card {
     background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
     border: 1px solid #dbe4ff;
     border-radius: 22px;
@@ -218,13 +329,15 @@ button.secondary-btn {
     box-shadow: 0 14px 30px rgba(37, 99, 235, 0.08);
 }
 
-.result-card h3 {
+.result-card h3,
+.gif-card h3 {
     margin: 8px 0 18px 0;
     font-size: 22px;
     color: var(--text);
 }
 
-.result-badge {
+.result-badge,
+.gif-badge {
     display: inline-block;
     background: #eef2ff;
     color: #4338ca;
@@ -280,14 +393,14 @@ button.secondary-btn {
     border-bottom: 1px solid #e5e7eb;
 }
 
+.top-item:last-child {
+    border-bottom: none;
+}
+
 .top-original {
     font-size: 12px;
     color: #6b7280;
     margin: -4px 0 8px 60px;
-}
-
-.top-item:last-child {
-    border-bottom: none;
 }
 
 .top-rank {
@@ -305,7 +418,38 @@ button.secondary-btn {
     font-weight: 800;
 }
 
-.result-empty {
+.accessible-summary {
+    margin-top: 18px;
+    padding: 16px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #4f46e5;
+    border-radius: 16px;
+    color: #111827;
+    line-height: 1.6;
+    font-size: 14px;
+}
+
+.gif-preview {
+    width: 100%;
+    max-height: 360px;
+    object-fit: contain;
+    border-radius: 18px;
+    border: 1px solid #dbe4ff;
+    background: #ffffff;
+    display: block;
+    margin-top: 14px;
+}
+
+.gif-tip {
+    margin: 14px 0 0 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.result-empty,
+.gif-empty {
     background: #fff;
     border: 2px dashed #d1d5db;
     border-radius: 20px;
@@ -318,31 +462,6 @@ button.secondary-btn {
 .error {
     border-color: #fecaca;
     background: #fff7f7;
-}
-
-.gradio-container {
-    max-width: 1200px !important;
-    width: 100% !important;
-    margin: 0 auto !important;
-    padding: 20px !important;
-    box-sizing: border-box !important;
-    overflow-x: hidden !important;
-}
-
-.card-wrap,
-.upload-card,
-.result-panel,
-.history-card,
-.table-wrap {
-    width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box !important;
-}
-
-.result-box {
-    width: 100% !important;
-    min-width: 0 !important;
-    overflow: hidden !important;
 }
 
 .table-wrap {
@@ -376,11 +495,6 @@ button.secondary-btn {
 .table-wrap th:nth-child(3),
 .table-wrap td:nth-child(3) {
     width: 24% !important;
-}
-
-button.primary-btn,
-button.secondary-btn {
-    width: 100% !important;
 }
 
 @media (max-width: 900px) {
@@ -423,7 +537,6 @@ button.secondary-btn {
         margin: 4px 0 10px 0 !important;
     }
 }
-
 """
 
 theme = gr.themes.Soft(
@@ -439,8 +552,8 @@ with gr.Blocks(css=css, theme=theme, title="Reconhecimento de Imagens") as demo:
     <div class="hero">
         <h1>Reconhecimento de Imagens com IA</h1>
         <p>
-            Envie uma imagem, receba a classificação gerada por inteligência artificial
-            e acompanhe o histórico das últimas análises.
+            Envie uma imagem, receba a classificação gerada por inteligência artificial,
+            gere um GIF animado da imagem e acompanhe o histórico das últimas análises.
         </p>
     </div>
     """)
@@ -465,10 +578,33 @@ with gr.Blocks(css=css, theme=theme, title="Reconhecimento de Imagens") as demo:
                 label="Resultado",
                 elem_classes=["result-box"]
             )
+            texto_acessivel = gr.Textbox(visible=False)
 
     with gr.Row():
         botao_analisar = gr.Button("Analisar imagem", elem_classes=["primary-btn"])
+        botao_gerar_gif = gr.Button("✨ Gerar GIF animado", elem_classes=["primary-btn"])
+
+    with gr.Row():
+        botao_ouvir = gr.Button("🔊 Ouvir resultado", elem_classes=["secondary-btn"])
+        botao_parar = gr.Button("⏹ Parar leitura", elem_classes=["secondary-btn"])
         botao_historico = gr.Button("Ver histórico", elem_classes=["secondary-btn"])
+
+    gr.HTML('<div class="section-title" style="margin-top: 24px;">GIF animado</div>')
+
+    with gr.Row(equal_height=True):
+        with gr.Column(scale=7, min_width=420, elem_classes=["card-wrap", "gif-panel"]):
+            gif_preview = gr.HTML(
+                """
+                <div class="gif-empty">
+                    A prévia do GIF vai aparecer aqui.
+                </div>
+                """,
+                label="Prévia do GIF",
+                elem_classes=["gif-box"]
+            )
+
+        with gr.Column(scale=3, min_width=280, elem_classes=["card-wrap", "gif-panel"]):
+            gif_arquivo = gr.File(label="Baixar GIF gerado")
 
     gr.HTML('<div class="section-title" style="margin-top: 24px;">Últimas análises</div>')
 
@@ -484,13 +620,54 @@ with gr.Blocks(css=css, theme=theme, title="Reconhecimento de Imagens") as demo:
     botao_analisar.click(
         fn=analisar_imagem,
         inputs=imagem,
-        outputs=resultado
+        outputs=[resultado, texto_acessivel]
+    )
+
+    botao_gerar_gif.click(
+        fn=gerar_gif,
+        inputs=imagem,
+        outputs=[gif_preview, gif_arquivo]
     )
 
     botao_historico.click(
         fn=ver_historico,
         inputs=None,
         outputs=historico
+    )
+
+    botao_ouvir.click(
+        fn=None,
+        inputs=[texto_acessivel],
+        outputs=None,
+        js="""
+        (texto) => {
+            if (!texto || !texto.trim()) return;
+
+            window.speechSynthesis.cancel();
+
+            const fala = new SpeechSynthesisUtterance(texto);
+            fala.lang = "pt-BR";
+            fala.rate = 1.0;
+            fala.pitch = 1.0;
+            fala.volume = 1.0;
+
+            const vozes = window.speechSynthesis.getVoices();
+            const vozPt =
+                vozes.find(v => v.lang && v.lang.toLowerCase().includes("pt-br")) ||
+                vozes.find(v => v.lang && v.lang.toLowerCase().startsWith("pt"));
+
+            if (vozPt) fala.voice = vozPt;
+
+            window.speechSynthesis.speak(fala);
+        }
+        """
+    )
+
+    botao_parar.click(
+        fn=None,
+        inputs=None,
+        outputs=None,
+        js="() => { window.speechSynthesis.cancel(); }"
     )
 
 if __name__ == "__main__":

@@ -1,8 +1,11 @@
 import io
+from pathlib import Path
+
 import requests
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse
+from PIL import Image, ImageOps
 from transformers import pipeline
-from PIL import Image
 
 app = FastAPI()
 
@@ -72,22 +75,79 @@ TRADUCOES = {
     "mountain bike": "Bicicleta de montanha",
 }
 
+
 def traduzir_rotulo(label: str) -> str:
     chave = label.strip().lower()
     if chave in TRADUCOES:
         return TRADUCOES[chave]
 
-    # fallback bonito se não estiver no dicionário
-    return (
-        label.replace("_", " ")
-             .replace("-", " ")
-             .strip()
-             .capitalize()
+    return label.replace("_", " ").replace("-", " ").strip().capitalize()
+
+
+def enquadrar_no_canvas(imagem: Image.Image, tamanho=(512, 512)) -> Image.Image:
+    ajustada = ImageOps.contain(imagem, tamanho, Image.LANCZOS)
+    canvas = Image.new("RGB", tamanho, (245, 248, 255))
+    x = (tamanho[0] - ajustada.width) // 2
+    y = (tamanho[1] - ajustada.height) // 2
+    canvas.paste(ajustada, (x, y))
+    return canvas
+
+
+def criar_gif_animado(imagem: Image.Image, tamanho=(512, 512), frames=16, duracao=90) -> io.BytesIO:
+    base = ImageOps.exif_transpose(imagem).convert("RGB")
+
+    limite = 900
+    if max(base.size) > limite:
+        escala = limite / max(base.size)
+        base = base.resize(
+            (int(base.width * escala), int(base.height * escala)),
+            Image.LANCZOS
+        )
+
+    w, h = base.size
+    quadros = []
+
+    for i in range(frames):
+        progresso = i / (frames - 1) if frames > 1 else 0
+        zoom = 1.0 + (0.18 * progresso)
+
+        corte_w = max(1, int(w / zoom))
+        corte_h = max(1, int(h / zoom))
+
+        max_left = max(w - corte_w, 0)
+        max_top = max(h - corte_h, 0)
+
+        left = int(max_left * (0.15 + 0.55 * progresso))
+        top = int(max_top * (0.10 + 0.45 * progresso))
+
+        left = min(max(left, 0), max_left)
+        top = min(max(top, 0), max_top)
+
+        quadro = base.crop((left, top, left + corte_w, top + corte_h))
+        quadro = enquadrar_no_canvas(quadro, tamanho=tamanho)
+        quadros.append(quadro)
+
+    if len(quadros) > 2:
+        quadros.extend(quadros[-2:0:-1])
+
+    buffer = io.BytesIO()
+    quadros[0].save(
+        buffer,
+        format="GIF",
+        save_all=True,
+        append_images=quadros[1:],
+        duration=duracao,
+        loop=0,
+        optimize=True,
     )
+    buffer.seek(0)
+    return buffer
+
 
 @app.get("/")
 def raiz():
     return {"status": "ok"}
+
 
 @app.post("/analisar")
 async def analisar_imagem(file: UploadFile = File(...)):
@@ -126,3 +186,20 @@ async def analisar_imagem(file: UploadFile = File(...)):
             for item in top3
         ]
     }
+
+
+@app.post("/gerar-gif")
+async def gerar_gif(file: UploadFile = File(...)):
+    conteudo = await file.read()
+    imagem = Image.open(io.BytesIO(conteudo))
+
+    gif_buffer = criar_gif_animado(imagem)
+
+    nome_base = Path(file.filename or "imagem").stem
+    nome_saida = f"{nome_base}_animado.gif"
+
+    return StreamingResponse(
+        gif_buffer,
+        media_type="image/gif",
+        headers={"Content-Disposition": f'inline; filename="{nome_saida}"'}
+    )
